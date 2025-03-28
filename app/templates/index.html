@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VK Style TODO</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #e1e3e6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      flex-direction: column;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      margin-bottom: 20px;
+      padding: 15px;
+    }
+    #login-card { max-width: 320px; padding: 16px; }
+    .input {
+      width: 100%; padding: 10px; margin: 6px 0;
+      border-radius: 8px; border: 1px solid #ccc;
+    }
+    #task-desc { height: 100px; resize: vertical; }
+    .char-counter {
+      font-size: 12px; color: #6d7885;
+      text-align: right; margin-top: -6px; margin-bottom: 4px;
+    }
+    .button {
+      background-color: #4a76a8; color: white; border: none;
+      padding: 10px; width: 100%; border-radius: 8px; cursor: pointer;
+    }
+    .button:hover { background-color: #3b5f8e; }
+    .button-group {
+      display: flex; gap: 10px; margin-top: 10px;
+    }
+    .button-group .button { flex: 1; }
+    .task {
+      background: white; padding: 15px; border-radius: 16px;
+      margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+    .task-title { font-weight: bold; color: #2c2d2e; margin-bottom: 15px; }
+    .task-desc { color: #6d7885; margin-bottom: 15px; overflow-wrap: break-word; }
+    .task-date { font-size: 12px; color: #aeb7c2; margin-bottom: 15px; }
+    #main { display: none; width: 100%; max-width: 600px; }
+    #task-list { margin-top: 20px; }
+    #register-modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.4); display: none;
+      justify-content: center; align-items: center; z-index: 1000;
+    }
+    .modal-content {
+      background: white; padding: 20px;
+      border-radius: 16px; max-width: 400px; width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="login-card">
+    <h2 style="text-align:center; color:#2c2d2e">Вход</h2>
+    <input class="input" type="text" id="username" placeholder="Логин" />
+    <input class="input" type="password" id="password" placeholder="Пароль" />
+    <div class="button-group">
+      <button class="button" onclick="login()">Войти</button>
+      <button class="button" onclick="openRegisterModal()">Регистрация</button>
+    </div>
+  </div>
+
+  <div id="register-modal">
+    <div class="modal-content">
+      <h3 style="text-align:center; color:#2c2d2e">Регистрация</h3>
+      <input class="input" type="text" id="reg-username" placeholder="Придумайте логин" />
+      <input class="input" type="password" id="reg-password" placeholder="Придумайте пароль" />
+      <input class="input" type="text" id="captcha" placeholder="Введите капчу: 1234" />
+      <div class="button-group">
+        <button class="button" onclick="register()">Создать</button>
+        <button class="button" style="background: #ccc; color: #000" onclick="closeRegisterModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div class="card">
+      <input class="input" type="text" id="task-title" placeholder="Название задачи" />
+      <textarea class="input" id="task-desc" placeholder="Описание задачи" maxlength="500"></textarea>
+      <div class="char-counter" id="char-count">0 / 500</div>
+      <button class="button" onclick="addTask()">Добавить</button>
+      <button class="button" style="background-color:#ccc; color:#000; margin-top:10px" onclick="logout()">Выйти</button>
+    </div>
+    <div id="task-list"></div>
+  </div>
+
+  <script>
+    let token = null;
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      token = localStorage.getItem("token");
+      if (token) {
+        document.getElementById("login-card").style.display = "none";
+        document.getElementById("main").style.display = "block";
+        await loadTasks(); // Загрузим задачи
+      }
+    });
+
+    async function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      const form = new URLSearchParams();
+      form.append("username", username);
+      form.append("password", password);
+
+      const response = await fetch("/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        token = data.access_token;
+        localStorage.setItem("token", token);
+        document.getElementById("login-card").style.display = "none";
+        document.getElementById("main").style.display = "block";
+        await loadTasks();
+      } else {
+        alert("Ошибка авторизации");
+      }
+    }
+
+    async function register() {
+      const name = document.getElementById("reg-username").value;
+      const pass = document.getElementById("reg-password").value;
+      const captcha = document.getElementById("captcha").value;
+
+      if (captcha !== "1234") {
+        alert("Неверная капча");
+        return;
+      }
+
+      const response = await fetch("/users/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, password: pass })
+      });
+
+      if (response.ok) {
+        alert("Регистрация успешна! Теперь войдите.");
+        closeRegisterModal();
+      } else {
+        alert("Ошибка регистрации");
+      }
+    }
+
+    async function addTask() {
+      const title = document.getElementById("task-title").value;
+      const desc = document.getElementById("task-desc").value;
+
+      if (!title || !desc) return;
+
+      const response = await fetch("/tasks/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: title, description: desc })
+      });
+
+      if (response.ok) {
+        await loadTasks();
+        document.getElementById("task-title").value = "";
+        document.getElementById("task-desc").value = "";
+        document.getElementById("char-count").textContent = "0 / 500";
+      } else {
+        alert("Ошибка при добавлении задачи");
+      }
+    }
+
+    async function loadTasks() {
+      const response = await fetch("/tasks/", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const tasks = await response.json();
+        const taskList = document.getElementById("task-list");
+        taskList.innerHTML = "";
+        tasks.forEach(task => {
+          const taskCard = document.createElement("div");
+          taskCard.className = "task";
+          taskCard.innerHTML = `
+            <div class="task-title">${task.name}</div>
+            <div class="task-desc">${task.description}</div>
+            <div class="task-date">Создано: ${new Date(task.registry_date).toLocaleString()}</div>
+          `;
+          taskList.appendChild(taskCard);
+        });
+      } else {
+        alert("Не удалось загрузить задачи");
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem("token");
+      token = null;
+      document.getElementById("main").style.display = "none";
+      document.getElementById("login-card").style.display = "block";
+    }
+
+    document.getElementById("task-desc").addEventListener("input", function () {
+      const length = this.value.length;
+      document.getElementById("char-count").textContent = `${length} / 500`;
+    });
+
+    function openRegisterModal() {
+      document.getElementById("register-modal").style.display = "flex";
+    }
+
+    function closeRegisterModal() {
+      document.getElementById("register-modal").style.display = "none";
+    }
+  </script>
+</body>
+</html>
