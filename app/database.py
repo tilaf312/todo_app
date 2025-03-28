@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 import os
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+psycopg2://postgres:vfrcbv@localhost:5432/todo_db"
+    "postgresql+psycopg2://todo_user:vfrcbv@localhost:5432/todo_db"
 )
 
 engine = create_engine(DATABASE_URL, echo=True)
