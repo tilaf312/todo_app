@@ -1,9 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
+import re
 
+PasswordStr = constr(min_length=1, pattern="^[A-Za-z0-9]+$")
 
 class UserCreate(BaseModel):
     name: str
-    password: str
+    password: PasswordStr
 
 
 class UserOut(BaseModel):

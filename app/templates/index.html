@@ -114,8 +114,42 @@
       align-items: center;
       z-index: 1000;
     }
+    .input-with-icon {
+      position: relative;
+      width: 100%;
+    }
 
+    .input-with-icon .hint-icon {
+      position: absolute;
+      top: 50%;
+      right: 10px;
+      transform: translateY(-50%);
+      background: #4a76a8;
+      color: white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      text-align: center;
+      line-height: 20px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
 
+    .input-with-icon .hint-tooltip {
+      position: absolute;
+      top: 110%;
+      right: 0;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      white-space: nowrap;
+      z-index: 100;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -133,7 +167,11 @@
     <div class="modal-content">
       <h3 style="text-align:center; color:#2c2d2e">Регистрация</h3>
       <input class="input" type="text" id="reg-username" placeholder="Придумайте логин" />
-      <input class="input" type="password" id="reg-password" placeholder="Придумайте пароль" />
+      <div class="input-with-icon" id="input-with-icon">
+        <input class="input" type="password" id="reg-password" placeholder="Придумайте пароль" />
+        <span class="hint-icon" onclick="togglePasswordHint()">?</span>
+        <div class="hint-tooltip" id="password-hint">Пароль должен состоять из латинских букв и цифр</div>
+      </div>
       <input class="input" type="text" id="captcha" placeholder="Введите капчу: 1234" />
       <div class="button-group">
         <button class="button" onclick="register()">Создать</button>
@@ -401,6 +439,14 @@ function closeDeleteModal() {
       }, 3000);
     }
 
+    function togglePasswordHint() {
+      const hint = document.getElementById("password-hint");
+      const block = document.querySelector(".input-with-icon");
+
+      const isVisible = hint.style.display === "block";
+      hint.style.display = isVisible ? "none" : "block";
+      block.style.marginBottom = isVisible ? "0" : "40px";
+    }
   </script>
 </body>
 </html>
