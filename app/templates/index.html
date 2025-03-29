@@ -316,6 +316,7 @@ async function confirmDelete() {
   });
 
   if (response.ok) {
+    showNotification("Задача успешно удалена", "success");
     await loadTasks();
   } else {
     showNotification("Не удалось удалить задачу", "error");
@@ -354,6 +355,7 @@ function closeDeleteModal() {
       if (response.ok) {
         editingTaskId = null;
         document.getElementById("edit-modal").style.display = "none";
+        showNotification("Задача успешно обновлена", "success");
         await loadTasks();
       } else {
         showNotification("Ошибка при обновлении задачи", "error");
