@@ -5,7 +5,7 @@ from typing import List
 from app.database import get_db
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskOut
+from app.schemas.task import TaskCreate, TaskOut, TaskUpdate
 from app.auth.jwt import get_current_user
 
 router = APIRouter()
@@ -48,3 +48,21 @@ def delete_task(
     db.delete(task)
     db.commit()
     return None
+
+
+@router.put("/{task_id}", response_model=TaskOut)
+def update_task(
+    task_id: int,
+    updated_task: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Задача не найдена")
+
+    task.name = updated_task.name
+    task.description = updated_task.description
+    db.commit()
+    db.refresh(task)
+    return task

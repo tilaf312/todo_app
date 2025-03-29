@@ -17,3 +17,8 @@ class TaskOut(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class TaskUpdate(BaseModel):
+    name: str
+    description: str

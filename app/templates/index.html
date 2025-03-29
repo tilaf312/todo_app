@@ -30,7 +30,7 @@
       width: 100%; padding: 10px; margin: 6px 0;
       border-radius: 8px; border: 1px solid #ccc;
     }
-    #task-desc { height: 100px; resize: vertical; }
+    #task-desc, #edit-task-desc { height: 100px; resize: vertical; }
     .char-counter {
       font-size: 12px; color: #6d7885;
       text-align: right; margin-top: -6px; margin-bottom: 4px;
@@ -39,7 +39,28 @@
       background-color: #4a76a8; color: white; border: none;
       padding: 10px; width: 100%; border-radius: 8px; cursor: pointer;
     }
-    .button:hover { background-color: #3b5f8e; }
+    .button:hover {
+      background-color: #3b5f8e;
+    }
+    .button:active {
+      transform: scale(0.98);
+    }
+    .button[style*="background-color:#f33"]:hover {
+      background-color: #d32f2f !important;
+    }
+    .button[style*="background-color:#4caf50"]:hover {
+      background-color: #388e3c !important;
+    }
+    .button[style*="background:#ccc"]:hover,
+    .button[style*="background-color:#ccc"]:hover {
+      background-color: #b3b3b3 !important;
+    }
+
+    .button svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
     .button-group {
       display: flex; gap: 10px; margin-top: 10px;
     }
@@ -53,7 +74,7 @@
     .task-date { font-size: 12px; color: #aeb7c2; margin-bottom: 15px; }
     #main { display: none; width: 100%; max-width: 600px; }
     #task-list { margin-top: 20px; }
-    #register-modal {
+    #register-modal, #edit-modal {
       position: fixed; top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.4); display: none;
       justify-content: center; align-items: center; z-index: 1000;
@@ -62,6 +83,39 @@
       background: white; padding: 20px;
       border-radius: 16px; max-width: 400px; width: 90%;
     }
+    #notification {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #323232;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+      z-index: 2000;
+    }
+    #notification.success { background-color: #4caf50; }
+    #notification.error { background-color: #f44336; }
+    #notification.info { background-color: #2196f3; }
+    #notification.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+
   </style>
 </head>
 <body>
@@ -88,6 +142,19 @@
     </div>
   </div>
 
+  <div id="edit-modal">
+    <div class="modal-content">
+      <h3 style="text-align:center; color:#2c2d2e">Редактировать задачу</h3>
+      <input class="input" type="text" id="edit-task-title" placeholder="Название задачи" />
+      <textarea class="input" id="edit-task-desc" placeholder="Описание задачи" maxlength="500"></textarea>
+      <div class="char-counter" id="edit-char-count">0 / 500</div>
+      <div class="button-group">
+        <button class="button" onclick="updateTask()">Сохранить</button>
+        <button class="button" style="background:#ccc; color:#000" onclick="closeEditModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
   <div id="main">
     <div class="card">
       <input class="input" type="text" id="task-title" placeholder="Название задачи" />
@@ -98,16 +165,29 @@
     </div>
     <div id="task-list"></div>
   </div>
+  <div id="notification"></div>
+  <div id="confirm-delete-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <h3 style="text-align:center; color:#2c2d2e">Удалить задачу?</h3>
+      <p style="text-align:center; color:#6d7885">Вы уверены, что хотите удалить эту задачу?</p>
+      <div class="button-group">
+        <button class="button" style="background-color:#f44336" onclick="confirmDelete()">Удалить</button>
+        <button class="button" style="background:#ccc; color:#000" onclick="closeDeleteModal()">Отмена</button>
+      </div>
+    </div>
+  </div>
+
 
   <script>
     let token = null;
+    let editingTaskId = null;
 
     window.addEventListener("DOMContentLoaded", async () => {
       token = localStorage.getItem("token");
       if (token) {
         document.getElementById("login-card").style.display = "none";
         document.getElementById("main").style.display = "block";
-        await loadTasks(); // Загрузим задачи
+        await loadTasks();
       }
     });
 
@@ -126,6 +206,7 @@
       });
 
       if (response.ok) {
+      showNotification("Успешно авторизован", "success");
         const data = await response.json();
         token = data.access_token;
         localStorage.setItem("token", token);
@@ -133,7 +214,7 @@
         document.getElementById("main").style.display = "block";
         await loadTasks();
       } else {
-        alert("Ошибка авторизации");
+        showNotification("Ошибка авторизации", "error");
       }
     }
 
@@ -143,7 +224,7 @@
       const captcha = document.getElementById("captcha").value;
 
       if (captcha !== "1234") {
-        alert("Неверная капча");
+        showNotification("Неверная капча", "error");
         return;
       }
 
@@ -154,10 +235,10 @@
       });
 
       if (response.ok) {
-        alert("Регистрация успешна! Теперь войдите.");
+        showNotification("Регистрация успешна! Теперь войдите.", "success");
         closeRegisterModal();
       } else {
-        alert("Ошибка регистрации");
+        showNotification("Ошибка регистрации", "error");
       }
     }
 
@@ -182,43 +263,52 @@
         document.getElementById("task-desc").value = "";
         document.getElementById("char-count").textContent = "0 / 500";
       } else {
-        alert("Ошибка при добавлении задачи");
+        showNotification("Ошибка при добавлении задачи", "error");
       }
     }
 
     async function loadTasks() {
-  const response = await fetch("/tasks/", {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${token}`
-    }
-  });
+      const response = await fetch("/tasks/", {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
 
-  if (response.ok) {
-    const tasks = await response.json();
-    const taskList = document.getElementById("task-list");
-    taskList.innerHTML = "";
-    tasks.forEach(task => {
-      const taskCard = document.createElement("div");
-      taskCard.className = "task";
-      taskCard.innerHTML = `
-        <div class="task-title">${task.name}</div>
-        <div class="task-desc">${task.description}</div>
-        <div class="task-date">Создано: ${new Date(task.registry_date).toLocaleString()}</div>
-        <button class="button" style="background-color:#f33; color:#fff; width:auto" onclick="deleteTask(${task.id})">Удалить</button>
-      `;
-      taskList.appendChild(taskCard);
-    });
-  } else {
-    alert("Не удалось загрузить задачи");
-  }
+      if (response.ok) {
+        const tasks = await response.json();
+        const taskList = document.getElementById("task-list");
+        taskList.innerHTML = "";
+        tasks.forEach(task => {
+          const taskCard = document.createElement("div");
+          taskCard.className = "task";
+          taskCard.innerHTML = `
+            <div class="task-title">${task.name}</div>
+            <div class="task-desc">${task.description}</div>
+            <div class="task-date">Создано: ${new Date(task.registry_date).toLocaleString()}</div>
+            <div class="button-group">
+              <button class="button" style="background-color:#f33; color:#fff; width:auto" onclick="deleteTask(${task.id})">Удалить</button>
+              <button class="button" style="background-color:#4caf50; color:#fff; width:auto" onclick="editTask(${task.id}, \`${task.name.replace(/`/g, "\\`")}\`, \`${task.description.replace(/`/g, "\\`")}\`)">Изменить</button>
+            </div>
+          `;
+          taskList.appendChild(taskCard);
+        });
+      } else {
+        showNotification("Не удалось загрузить задачи", "error");
+      }
+    }
+
+    let taskIdToDelete = null;
+
+function deleteTask(taskId) {
+  taskIdToDelete = taskId;
+  document.getElementById("confirm-delete-modal").style.display = "flex";
 }
 
-async function deleteTask(taskId) {
-  const confirmDelete = confirm("Вы уверены, что хотите удалить задачу?");
-  if (!confirmDelete) return;
+async function confirmDelete() {
+  if (!taskIdToDelete) return;
 
-  const response = await fetch(`/tasks/${taskId}`, {
+  const response = await fetch(`/tasks/${taskIdToDelete}`, {
     method: "DELETE",
     headers: {
       "Authorization": `Bearer ${token}`
@@ -228,10 +318,47 @@ async function deleteTask(taskId) {
   if (response.ok) {
     await loadTasks();
   } else {
-    alert("Не удалось удалить задачу");
+    showNotification("Не удалось удалить задачу", "error");
   }
+
+  taskIdToDelete = null;
+  closeDeleteModal();
 }
 
+function closeDeleteModal() {
+  document.getElementById("confirm-delete-modal").style.display = "none";
+}
+
+    function editTask(id, name, description) {
+      document.getElementById("edit-task-title").value = name;
+      document.getElementById("edit-task-desc").value = description;
+      document.getElementById("edit-char-count").textContent = `${description.length} / 500`;
+      editingTaskId = id;
+      document.getElementById("edit-modal").style.display = "flex";
+    }
+
+    async function updateTask() {
+      const title = document.getElementById("edit-task-title").value;
+      const desc = document.getElementById("edit-task-desc").value;
+      if (!title || !desc || editingTaskId === null) return;
+
+      const response = await fetch(`/tasks/${editingTaskId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: title, description: desc })
+      });
+
+      if (response.ok) {
+        editingTaskId = null;
+        document.getElementById("edit-modal").style.display = "none";
+        await loadTasks();
+      } else {
+        showNotification("Ошибка при обновлении задачи", "error");
+      }
+    }
 
     function logout() {
       localStorage.removeItem("token");
@@ -245,6 +372,11 @@ async function deleteTask(taskId) {
       document.getElementById("char-count").textContent = `${length} / 500`;
     });
 
+    document.getElementById("edit-task-desc").addEventListener("input", function () {
+      const length = this.value.length;
+      document.getElementById("edit-char-count").textContent = `${length} / 500`;
+    });
+
     function openRegisterModal() {
       document.getElementById("register-modal").style.display = "flex";
     }
@@ -252,6 +384,21 @@ async function deleteTask(taskId) {
     function closeRegisterModal() {
       document.getElementById("register-modal").style.display = "none";
     }
+
+    function closeEditModal() {
+      document.getElementById("edit-modal").style.display = "none";
+      editingTaskId = null;
+    }
+
+    function showNotification(message, type = "info") {
+      const notification = document.getElementById("notification");
+      notification.textContent = message;
+      notification.className = `show ${type}`;
+      setTimeout(() => {
+        notification.className = notification.className.replace("show", "").trim();
+      }, 3000);
+    }
+
   </script>
 </body>
 </html>
