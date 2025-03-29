@@ -187,31 +187,51 @@
     }
 
     async function loadTasks() {
-      const response = await fetch("/tasks/", {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const tasks = await response.json();
-        const taskList = document.getElementById("task-list");
-        taskList.innerHTML = "";
-        tasks.forEach(task => {
-          const taskCard = document.createElement("div");
-          taskCard.className = "task";
-          taskCard.innerHTML = `
-            <div class="task-title">${task.name}</div>
-            <div class="task-desc">${task.description}</div>
-            <div class="task-date">Создано: ${new Date(task.registry_date).toLocaleString()}</div>
-          `;
-          taskList.appendChild(taskCard);
-        });
-      } else {
-        alert("Не удалось загрузить задачи");
-      }
+  const response = await fetch("/tasks/", {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`
     }
+  });
+
+  if (response.ok) {
+    const tasks = await response.json();
+    const taskList = document.getElementById("task-list");
+    taskList.innerHTML = "";
+    tasks.forEach(task => {
+      const taskCard = document.createElement("div");
+      taskCard.className = "task";
+      taskCard.innerHTML = `
+        <div class="task-title">${task.name}</div>
+        <div class="task-desc">${task.description}</div>
+        <div class="task-date">Создано: ${new Date(task.registry_date).toLocaleString()}</div>
+        <button class="button" style="background-color:#f33; color:#fff; width:auto" onclick="deleteTask(${task.id})">Удалить</button>
+      `;
+      taskList.appendChild(taskCard);
+    });
+  } else {
+    alert("Не удалось загрузить задачи");
+  }
+}
+
+async function deleteTask(taskId) {
+  const confirmDelete = confirm("Вы уверены, что хотите удалить задачу?");
+  if (!confirmDelete) return;
+
+  const response = await fetch(`/tasks/${taskId}`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`
+    }
+  });
+
+  if (response.ok) {
+    await loadTasks();
+  } else {
+    alert("Не удалось удалить задачу");
+  }
+}
+
 
     function logout() {
       localStorage.removeItem("token");
