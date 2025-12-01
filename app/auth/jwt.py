@@ -17,12 +17,28 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Проверяет пароль против хеша"""
+    """
+    Проверяет пароль против хеша.
+    Bcrypt ограничивает длину пароля до 72 байт, поэтому обрезаем при необходимости.
+    """
+    # Обрезаем пароль до 72 байт для совместимости с bcrypt
+    if isinstance(plain_password, str):
+        password_bytes = plain_password.encode('utf-8')[:72]
+        # Декодируем обратно, но если обрезка произошла посередине символа, используем errors='ignore'
+        plain_password = password_bytes.decode('utf-8', errors='ignore')
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    """Хеширует пароль"""
+    """
+    Хеширует пароль.
+    Bcrypt ограничивает длину пароля до 72 байт, поэтому обрезаем при необходимости.
+    """
+    # Обрезаем пароль до 72 байт для совместимости с bcrypt
+    if isinstance(password, str):
+        password_bytes = password.encode('utf-8')[:72]
+        # Декодируем обратно, но если обрезка произошла посередине символа, используем errors='ignore'
+        password = password_bytes.decode('utf-8', errors='ignore')
     return pwd_context.hash(password)
 
 
