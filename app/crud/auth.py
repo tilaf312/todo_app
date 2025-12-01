@@ -1,11 +1,16 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.models.user import User
 from app.schemas.auth import AuthRequest
-import bcrypt
+from app.auth.jwt import verify_password
 
 
-def authenticate_user(db: Session, auth_data: AuthRequest) -> bool:
-    user = db.query(User).filter(User.name == auth_data.name).first()
+async def authenticate_user(db: AsyncSession, auth_data: AuthRequest) -> bool:
+    """Аутентифицирует пользователя (для обратной совместимости)"""
+    result = await db.execute(select(User).where(User.name == auth_data.name))
+    user = result.scalar_one_or_none()
+    
     if not user:
         return False
-    return bcrypt.checkpw(auth_data.password.encode(), user.password.encode())
+    
+    return verify_password(auth_data.password, user.password)
