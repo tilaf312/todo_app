@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 import hashlib
-import base64
+import secrets
 
 from app.models.user import User
 from app.database import get_db
@@ -18,64 +18,64 @@ token_storage = {}
 
 
 def get_password_hash(password: str) -> str:
-    """Создает строку похожую на хеш для сохранения в БД (простая имитация)"""
-    # Создаем хеш используя SHA256
+    """Создает хеш пароля для сохранения в БД (простая имитация)"""
+    # Используем SHA256 для создания хеша
     hash_obj = hashlib.sha256(password.encode('utf-8'))
     hash_hex = hash_obj.hexdigest()
     
-    # Кодируем hex в base64 для более компактного вида
-    b64_hash = base64.b64encode(hash_hex.encode()).decode()
+    # Добавляем соль для безопасности (генерируем случайную строку)
+    salt = secrets.token_hex(16)  # 32 символа в hex
     
-    # Добавляем префикс для похожести на bcrypt ($2b$10$)
-    # bcrypt hash имеет формат: $2b$10$ + 53 символа base64 = 60 символов всего
-    # Сохраняем реальный хеш (43 символа) и дополняем до 53 для похожести
-    real_hash = b64_hash[:43]  # SHA256 hex (64 символа) в base64 = 43 символа
+    # Создаем финальный хеш: соль + хеш пароля
+    combined = salt + hash_hex
+    final_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
     
-    # Дополняем до 53 символов случайными base64 символами для похожести на bcrypt
-    import random
-    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    padding = ''.join(random.choice(chars) for _ in range(53 - len(real_hash)))
-    hash_part = real_hash + padding
-    
-    return f"$2b$10${hash_part}"
+    # Формат: $hash$salt$final_hash (для удобства хранения)
+    return f"$hash${salt}${final_hash}"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Проверка пароля - извлекает оригинальный хеш и сравнивает"""
-    # Проверяем формат хеша
-    if not hashed_password.startswith("$2b$10$"):
-        # Если старый формат (без хеша), сравниваем напрямую для обратной совместимости
-        return plain_password == hashed_password
-    
-    # Извлекаем base64 часть
-    b64_part = hashed_password[7:]  # Убираем "$2b$10$"
-    
+    """Проверка пароля - сравнивает хеш введенного пароля с сохраненным"""
     try:
+        # Проверяем формат хеша
+        if not hashed_password.startswith("$hash$"):
+            # Если старый формат (без хеша), сравниваем напрямую для обратной совместимости
+            return plain_password == hashed_password
+        
+        # Извлекаем соль и финальный хеш
+        parts = hashed_password.split("$")
+        if len(parts) != 4:  # ['', 'hash', 'salt', 'final_hash']
+            return False
+        
+        salt = parts[2]
+        stored_hash = parts[3]
+        
         # Вычисляем хеш от введенного пароля
-        hash_obj = hashlib.sha256(plain_password.encode('utf-8'))
-        input_hex = hash_obj.hexdigest()
-        input_b64 = base64.b64encode(input_hex.encode()).decode()
+        password_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
         
-        # Сравниваем только реальную часть хеша (первые 43 символа)
-        # Остальные символы - это padding для похожести на bcrypt
-        stored_real = b64_part[:43]
-        input_real = input_b64[:43]
+        # Комбинируем соль с хешем пароля
+        combined = salt + password_hash
+        computed_hash = hashlib.sha256(combined.encode('utf-8')).hexdigest()
         
-        return stored_real == input_real
+        # Сравниваем хеши
+        return stored_hash == computed_hash
     except Exception:
         # Если что-то пошло не так, возвращаем False
         return False
 
 
 def create_access_token(data: dict, expires_delta=None):
-    """Создает простой токен в формате 'token_{username}'"""
+    """Создает простой токен (имитация JWT)"""
     username = data.get("sub")
     if not username:
         raise ValueError("Username is required")
-    # Простой токен для тестов
-    token = f"token_{username}"
-    # Сохраняем токен в памяти
+    
+    # Генерируем случайный токен
+    token = secrets.token_urlsafe(32)
+    
+    # Сохраняем токен в памяти с привязкой к username
     token_storage[token] = username
+    
     return token
 
 
@@ -89,9 +89,11 @@ def authenticate_user(db: Session, username: str, password: str):
     user = get_user(db, username)
     if not user:
         return False
-    # Простая проверка пароля для тестов
+    
+    # Проверяем пароль
     if not verify_password(password, user.password):
         return False
+    
     return user
 
 
@@ -103,16 +105,16 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    # Простая проверка токена
-    if not token or not token.startswith("token_"):
+    # Проверяем наличие токена
+    if not token:
         raise credentials_exception
     
-    # Извлекаем username из токена
-    username = token.replace("token_", "", 1)
-    
-    # Проверяем, что токен есть в хранилище (для тестов)
+    # Проверяем, что токен есть в хранилище
     if token not in token_storage:
         raise credentials_exception
+    
+    # Получаем username из хранилища
+    username = token_storage[token]
     
     # Получаем пользователя из базы данных
     user = get_user(db, username)
